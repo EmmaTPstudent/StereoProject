@@ -5,10 +5,6 @@ using namespace cv;
 using namespace std;
 
 
-
-
-
-
 #include <iostream>
 #include <cmath>
 #include <math.h>
@@ -36,10 +32,7 @@ using namespace cv;
 
 void detectEdge(const Mat& in, Mat& out);
 
-ostream& operator<<(ostream& out, vector<vector<int>> v);
-
-
-// Helper function to find the intersection of two lines in polar coordinates
+// FIND INTERECTION OF TWO LINES GIVEN BY POLAR COORDINATES
 cv::Point2f findIntersection(const std::pair<double, double>& line1, const std::pair<double, double>& line2) {
     double rho1 = line1.first, theta1 = line1.second * pi / 180.0;
     double rho2 = line2.first, theta2 = line2.second * pi / 180.0;
@@ -63,7 +56,7 @@ cv::Point2f findIntersection(const std::pair<double, double>& line1, const std::
     return cv::Point2f(intersection.at<double>(0, 0), intersection.at<double>(1, 0));
 }
 
-
+// CHECK FOR OVERLAPPING MARKERS
 bool isPointInArray(const std::vector<std::vector<cv::Point2f>>& pointsArray, const cv::Point2f& targetPoint) {
     return std::any_of(pointsArray.begin(), pointsArray.end(), [&](const std::vector<cv::Point2f>& row) {
         return std::any_of(row.begin(), row.end(), [&](const cv::Point2f& point) {
@@ -72,10 +65,46 @@ bool isPointInArray(const std::vector<std::vector<cv::Point2f>>& pointsArray, co
         });
 }
 
+bool checkDetect(const int d, const cv::Point2f intersection, const int width, const int height, Mat img) {
+    // Define rectangle corners
+    Point2f p1 = intersection + Point2f(d, d);
+    Point2f p2 = intersection + Point2f(d, -d);
+    Point2f p3 = intersection + Point2f(-d, -d);
+    Point2f p4 = intersection + Point2f(-d, d);
 
+    // Check if all points are valid and inside the image
+    if (p1.x >= 0 && p1.x < width && p1.y >= 0 && p1.y < height &&
+        p2.x >= 0 && p2.x < width && p2.y >= 0 && p2.y < height &&
+        p3.x >= 0 && p3.x < width && p3.y >= 0 && p3.y < height &&
+        p4.x >= 0 && p4.x < width && p4.y >= 0 && p4.y < height
+        ) {
+
+        //cv::line(output, p1, p2, cv::Scalar(255, 0, 0), 1);
+        //cv::line(output, p2, p3, cv::Scalar(255, 0, 0), 1);
+        //cv::line(output, p3, p4, cv::Scalar(255, 0, 0), 1);
+        //cv::line(output, p4, p1, cv::Scalar(255, 0, 0), 1);
+
+        // Get intensities at the corners
+        int intensity1 = img.at<uchar>(p1.y, p1.x);
+        int intensity2 = img.at<uchar>(p2.y, p2.x);
+        int intensity3 = img.at<uchar>(p3.y, p3.x);
+        int intensity4 = img.at<uchar>(p4.y, p4.x);
+
+        // Check for alternating intensity pattern
+        if ((intensity1 < 30 && intensity2 > 225 && intensity3 < 30 && intensity4 > 225) ||
+            (intensity1 > 225 && intensity2 < 30 && intensity3 > 225 && intensity4 < 30)) {
+            //cout << "Found checkerboard at: " << endl;
+            //cout << "p1: " << p1 << " p2: " << p2 << " p3:" << p3 << " p4:" << p4 << endl;
+            //cout << "p1 intensity:" << intensity1 << " p2 intensity:" << intensity2 << " p3 intensity:" << intensity3 << " p4 intensity:" << intensity4 << endl;
+            return 1;
+        }
+    }
+    return 0;
+}
 
 int main() {
 
+    string filename = "sample1_L_LedsAll_marked.png";
     int i, j;
     int theta;      // parametro di angolo di inclinazione nel sistema di coordinate polari
     double rho;     // parametro di distanza (rho) nel sistema di coordinate polari
@@ -83,46 +112,31 @@ int main() {
     Mat source, edges, output;
 
     
-
     deque<pair<int, int>> edgePoints;  // <row, col>
 
-    source = cv::imread("sample1_L_LedsAll_marked.png", cv::IMREAD_GRAYSCALE);
-    cout << "w:" << source.cols << " h: " << source.rows << endl;
-
+    source = cv::imread(filename, cv::IMREAD_GRAYSCALE);
+    output = cv::imread(filename, cv::IMREAD_COLOR);
     int h = source.rows / 6;
     int w = source.cols / 6;
+
     imdisp("Source image", source, 0, 0, w, h, 0, 0);
 
-    output = cv::imread("sample1_L_LedsAll_marked.png", cv::IMREAD_COLOR);
-
-
+    // Votes matrix: max rho, max theta
     int maxDistance = hypot(source.rows, source.cols);
-
-    cout << maxDistance << "\n";
-
-    // matrice di voti
     vector<vector<int>> votes(2 * maxDistance, vector<int>(NUM_BINS, 0));
+    cout << "Votes matrix size: " << votes.size() << ", " << votes[0].size() << endl;
 
-    cout << "Votes matrix: " << votes.size() << ", " << votes[0].size() << endl;
-
-    // downsample: tengo solo i bordi dell'immagine
+    // Detect edges using canny filter
     detectEdge(source, edges);
-
     imdisp("edge detection result", edges, 0, 0, w, h, 1, 0);
 
-
-    // vote
+    // Hough tranform: Voting for the edges to detect lines
     cout << "Voting ..." << endl;
-
     for (i = 0; i < edges.rows; ++i) {
         for (j = 0; j < edges.cols; ++j) {
-
-            if (edges.at<uchar>(i, j) == 255) {  // se incontro edge point
-
-                // guarda gli angoli [-90°, +90°]
+            if (edges.at<uchar>(i, j) == 255) { // Edge point
                 for (theta = 0; theta < 180; theta += BIN_WIDTH) {
                     rho = round(j * cos((theta-90)*pi/180.0) + i * sin((theta - 90) * pi / 180.0)) + maxDistance;
-
                     if (0 < rho and (rho < (2 * maxDistance)) ) {
                         //cout << "Rho: " << rho << ", Theta: " << theta << endl;
                         votes[rho][theta]++;
@@ -132,26 +146,19 @@ int main() {
         }
     }
 
-    //cout<< votes <<"\n";
-
-    // find peaks
+    // Find peaks
     cout << "Finding peaks ..." << endl;
     int lineTreshold = 100;
-    std::vector<std::pair<double, double>> lines;
+    std::vector<std::pair<double, double>> lines; // Vector for storing the lines
 
     for (i = 0; i < votes.size(); ++i) {
         for (j = 0; j < votes[i].size(); ++j) {
             if (votes[i][j] >= lineTreshold) {
-
                 rho = i - maxDistance;
                 theta = j - 90;
                 lines.emplace_back(rho, theta);
 
-                //cout << "found line with rho = " << rho << " and theta = " << theta << "\n";
-
-                // converti linea da polare a cartesiana
-
-                // Determine two points far enough apart to draw the line
+                // Convert polar coordinate line to two point at the image border
                 double a = std::cos(theta*pi/180.0);
                 double b = std::sin(theta * pi / 180.0);
                 double x0 = a * rho;
@@ -161,80 +168,58 @@ int main() {
 
                 // Draw the line
                 cv::line(output, pt1, pt2, Scalar(255,255,255), 1);
-
-
             }
         }
     }
 
     imdisp("output image", output, 0, 0, w, h, 0, 1);
 
-
     std::vector<cv::Point2f> intersections;
     std::vector<std::vector<cv::Point2f>> checkerboard;
     
-    // Find all intersections
-    for (size_t i = 0; i < lines.size(); ++i) {
-        for (size_t j = i + 1; j < lines.size(); ++j) {
-            Point2f intersection = findIntersection(lines[i], lines[j]);
-            if (intersection.x >= 0 && intersection.x < source.cols && intersection.y >= 0 && intersection.y < source.rows) {
-                intersections.push_back(intersection);
-                //cout << "Found intersection at: " << intersection << endl;
-            }
-        }
-    }
-
     // Check for checkerboard quadrants
-    int d = 2;
     int width = source.cols;
     int height = source.rows;
+    int d = 2; // how far from line to search check colors
+    // Define axis lengths for drawing
+    int axisLength = 300;
+    float angle;
 
-    for (int i = 0; i < intersections.size(); ++i) {
+    // Find all intersections
+    for (size_t i = 0; i < lines.size(); ++i) { // iterate through lines
+        for (size_t j = i + 1; j < lines.size(); ++j) { // iterate through lines, kipping the one we already looked at
 
-        // Define rectangle corners
-        Point2f p1 = intersections[i] + Point2f(d, d);
-        Point2f p2 = intersections[i] + Point2f(d, -d);
-        Point2f p3 = intersections[i] + Point2f(-d, -d);
-        Point2f p4 = intersections[i] + Point2f(-d, d);
+            Point2f intersection = findIntersection(lines[i], lines[j]);
+            if (intersection.x >= 0 && intersection.x < source.cols && intersection.y >= 0 && intersection.y < source.rows) { // if within image
 
-        // Check if all points are valid and inside the image
-        if (p1.x >= 0 && p1.x < width && p1.y >= 0 && p1.y < height && 
-            p2.x >= 0 && p2.x < width && p2.y >= 0 && p2.y < height && 
-            p3.x >= 0 && p3.x < width && p3.y >= 0 && p3.y < height &&
-            p4.x >= 0 && p4.x < width && p4.y >= 0 && p4.y < height &&
-            not isPointInArray(checkerboard, p1)
-            ) {
+                if (not isPointInArray(checkerboard, intersection)) { // Reject intersections we already detected a check at
 
-            cv::line(output, p1, p2, cv::Scalar(255, 0, 0), 1);
-            cv::line(output, p2, p3, cv::Scalar(255, 0, 0), 1);
-            cv::line(output, p3, p4, cv::Scalar(255, 0, 0), 1);
-            cv::line(output, p4, p1, cv::Scalar(255, 0, 0), 1);
-            
-                
-            // Get intensities at the corners
-            int intensity1 = source.at<uchar>(p1.y, p1.x);
-            int intensity2 = source.at<uchar>(p2.y, p2.x);
-            int intensity3 = source.at<uchar>(p3.y, p3.x);
-            int intensity4 = source.at<uchar>(p4.y, p4.x);
-            
+                    if (checkDetect(d, intersection, source.cols, source.rows, source)) {
+                    
+                        checkerboard.push_back({ intersection }); // add marker to list
 
-            // Check for alternating intensity pattern
-            if ((intensity1 < 30 && intensity2 > 225 && intensity3 < 30 && intensity4 > 225) ||
-                (intensity1 > 225 && intensity2 < 30 && intensity3 > 225 && intensity4 < 30)) {
-                cout << "Found checkerboard at: " << endl;
-                cout << "p1: " << p1 << " p2: " << p2 << " p3:" << p3 << " p4:" << p4 << endl;
-                cout << "p1 intensity:" << intensity1 << " p2 intensity:" << intensity2 << " p3 intensity:" << intensity3 << " p4 intensity:" << intensity4 << endl;
+                        circle(output, intersection, 50, Scalar(0, 255, 0), 10);
 
-                checkerboard.push_back({p1, p2, p3, p4});
-                cv::line(output, p1, p2, cv::Scalar(0, 255, 0), 5);
-                cv::line(output, p2, p3, cv::Scalar(0, 255, 0), 5);
-                cv::line(output, p3, p4, cv::Scalar(0, 255, 0), 5);
-                cv::line(output, p4, p1, cv::Scalar(0, 255, 0), 5);
+                        angle = lines[i].second * pi / 180.0;
+
+                        // Calculate ends of axis to draw
+                        cv::Point xAxisEnd(intersection.x + static_cast<int>(axisLength * cos(angle)),
+                            intersection.y + static_cast<int>(axisLength * sin(angle)));
+                        cv::Point yAxisEnd(intersection.x - static_cast<int>(axisLength * sin(angle)),
+                            intersection.y + static_cast<int>(axisLength * cos(angle)));
+
+                        // Draw
+                        cv::line(output, intersection, xAxisEnd, cv::Scalar(0, 0, 255), 10);
+                        cv::line(output, intersection, yAxisEnd, cv::Scalar(255, 0, 0), 10); 
+
+                    }
+                }
             }
         }
     }
 
-    imdisp("Checks", output, 0, 0, w*2, h*2, 0, 0);
+
+    imdisp("Checks", output, 0, 0, w, h, 1, 1);
 
     waitKey();
 
@@ -244,43 +229,10 @@ int main() {
 
 
 
-
-
-
-
-
-
-
 void detectEdge(const Mat& in, Mat& out) {
-
     blur(in, out, Size(3, 3));  // per immunità al rumore, sfocatura
-
     Canny(out, out, TRESHOLD, TRESHOLD * RATIO, KERNEL_SIZE);
 }
-
-ostream& operator<<(ostream& out, vector<vector<int>> v) {
-
-    for (int i = 0; i < v.size(); ++i) {
-        for (int j = 0; j < v[i].size(); ++j) {
-            cout << v[i][j] << " ";
-        }
-        cout << "\n";
-    }
-
-    return out;
-}
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
