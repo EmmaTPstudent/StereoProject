@@ -102,7 +102,7 @@ bool checkDetect(const int d, const cv::Point2f intersection, const int width, c
     return 0;
 }
 
-int main() {
+int main2() {
 
     string filename = "sample1_L_LedsAll_marked.png";
     int i, j;
@@ -221,23 +221,18 @@ int main() {
 
     imdisp("Checks", output, 0, 0, w, h, 1, 1);
 
+    cout << checkerboard[0] << checkerboard[1] << checkerboard[2] << checkerboard[3] << endl;
+
     waitKey();
 
     return 0;
 }
 
 
-
-
 void detectEdge(const Mat& in, Mat& out) {
     blur(in, out, Size(3, 3));  // per immunità al rumore, sfocatura
     Canny(out, out, TRESHOLD, TRESHOLD * RATIO, KERNEL_SIZE);
 }
-
-
-
-
-
 
 
 int main1() {
