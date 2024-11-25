@@ -3,12 +3,12 @@
 #include <vector>
 #include <cmath>
 
-// Function to compute the Euclidean distance between two cv::Point2f
+// Euclidean distance between two cv::Point2f
 double euclideanDistance(const cv::Point2f& p1, const cv::Point2f& p2) {
-    return std::sqrt(std::pow(p1.x - p2.x, 2) + std::pow(p1.y - p2.y, 2));
+    return std::sqrt(std::pow(p1.x - p2.x, 2) + std::pow(p1.y - p2.y, 2)); // d_e = sqrt(d_x^2 + d_y^2)
 }
 
-// Function to find the nearest neighbor correspondences
+// Nearest neighbor correspondences
 std::vector<int> findCorrespondences(const std::vector<cv::Point2f>& source, const std::vector<cv::Point2f>& target) {
     std::vector<int> correspondences(source.size(), -1);
 
@@ -23,11 +23,9 @@ std::vector<int> findCorrespondences(const std::vector<cv::Point2f>& source, con
                 bestMatch = j;
             }
         }
-
         correspondences[i] = bestMatch;
     std::cout << bestMatch << std::endl;
     }
-
     return correspondences;
 }
 
@@ -91,36 +89,22 @@ cv::Mat computeTransformation(const std::vector<cv::Point2f>& source, const std:
 }
 
 void decomposeTransformation(const cv::Mat& transformation) {
-    // Ensure the matrix is 3x3
-    if (transformation.rows != 3 || transformation.cols != 3) {
-        std::cerr << "Invalid transformation matrix size!" << std::endl;
-        return;
-    }
-
     // Extract translation vector
     double tx = transformation.at<double>(0, 2);
     double ty = transformation.at<double>(1, 2);
-
     std::cout << "Translation Vector:\n";
     std::cout << "[ " << tx << ", " << ty << " ]" << std::endl;
-
     // Extract rotation matrix elements
     double r11 = transformation.at<double>(0, 0);
     double r21 = transformation.at<double>(1, 0);
-
     // Compute the rotation angle (in radians)
     double rotationAngle = std::atan2(r21, r11);
-
-    std::cout << "Rotation Angle (in radians): " << rotationAngle << std::endl;
     std::cout << "Rotation Angle (in degrees): " << rotationAngle * (180.0 / CV_PI) << std::endl;
 }
 
 
-int main() {
+int main3() {
     // Example source and target point clouds
-    //std::vector<cv::Point2f> sourcePoints = { {0, 0}, {1, 0}, {0, 1} };
-    //std::vector<cv::Point2f> targetPoints = { {2, 2}, {2, 8}, {1, 2} };
-
     std::vector<cv::Point2f> sourcePoints = { {2530, 690},{1468, 1673},{3412, 1636},{2487, 2466} };
     std::vector<cv::Point2f> targetPoints = { {1833.1335, 745.4787},{807.12097, 1765.9076},{2748.5408, 1658.0874},{1854.14, 2521.8276} };
 

@@ -27,7 +27,7 @@ using namespace cv;
 /* === PARAMETRI PER CANNY EDGE DETECTION === */
 
 #define KERNEL_SIZE 3
-#define TRESHOLD 100
+#define TRESHOLD 80
 #define RATIO 3
 
 void detectEdge(const Mat& in, Mat& out);
@@ -36,6 +36,7 @@ void detectEdge(const Mat& in, Mat& out);
 cv::Point2f findIntersection(const std::pair<double, double>& line1, const std::pair<double, double>& line2) {
     double rho1 = line1.first, theta1 = line1.second * pi / 180.0;
     double rho2 = line2.first, theta2 = line2.second * pi / 180.0;
+
 
     // Line equation in matrix form: A * [x, y]^T = b
     double a1 = std::cos(theta1), b1 = std::sin(theta1);
@@ -66,6 +67,9 @@ bool isPointInArray(const std::vector<std::vector<cv::Point2f>>& pointsArray, co
 }
 
 bool checkDetect(const int d, const cv::Point2f intersection, const int width, const int height, Mat img) {
+    int low = 50;
+    int high = 180;
+
     // Define rectangle corners
     Point2f p1 = intersection + Point2f(d, d);
     Point2f p2 = intersection + Point2f(d, -d);
@@ -91,8 +95,8 @@ bool checkDetect(const int d, const cv::Point2f intersection, const int width, c
         int intensity4 = img.at<uchar>(p4.y, p4.x);
 
         // Check for alternating intensity pattern
-        if ((intensity1 < 30 && intensity2 > 225 && intensity3 < 30 && intensity4 > 225) ||
-            (intensity1 > 225 && intensity2 < 30 && intensity3 > 225 && intensity4 < 30)) {
+        if ((intensity1 < low && intensity2 > high && intensity3 < low && intensity4 > high) ||
+            (intensity1 > high && intensity2 < low && intensity3 > high && intensity4 < low)) {
             //cout << "Found checkerboard at: " << endl;
             //cout << "p1: " << p1 << " p2: " << p2 << " p3:" << p3 << " p4:" << p4 << endl;
             //cout << "p1 intensity:" << intensity1 << " p2 intensity:" << intensity2 << " p3 intensity:" << intensity3 << " p4 intensity:" << intensity4 << endl;
@@ -102,9 +106,9 @@ bool checkDetect(const int d, const cv::Point2f intersection, const int width, c
     return 0;
 }
 
-int main2() {
+int main() {
 
-    string filename = "sample1_L_LedsAll_marked.png";
+    string filename = "sample1_R_LedsAll_marked.png";
     int i, j;
     int theta;      // parametro di angolo di inclinazione nel sistema di coordinate polari
     double rho;     // parametro di distanza (rho) nel sistema di coordinate polari
@@ -180,7 +184,7 @@ int main2() {
     // Check for checkerboard quadrants
     int width = source.cols;
     int height = source.rows;
-    int d = 2; // how far from line to search check colors
+    int d = 20; // how far from line to search check colors
     // Define axis lengths for drawing
     int axisLength = 300;
     float angle;
@@ -221,7 +225,7 @@ int main2() {
 
     imdisp("Checks", output, 0, 0, w, h, 1, 1);
 
-    cout << checkerboard[0] << checkerboard[1] << checkerboard[2] << checkerboard[3] << endl;
+    //cout << checkerboard[0] << checkerboard[1] << checkerboard[2] << checkerboard[3] << endl;
 
     waitKey();
 
