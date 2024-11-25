@@ -110,8 +110,8 @@ int main() {
 
     string filename = "sample1_R_LedsAll_marked.png";
     int i, j;
-    int theta;      // parametro di angolo di inclinazione nel sistema di coordinate polari
-    double rho;     // parametro di distanza (rho) nel sistema di coordinate polari
+    int theta;  // angle of line
+    double rho; // distance of point at ortogonal vector
 
     Mat source, edges, output;
 
