@@ -27,7 +27,7 @@ using namespace cv;
 /* === PARAMETRI PER CANNY EDGE DETECTION === */
 
 #define KERNEL_SIZE 3
-#define TRESHOLD 80
+#define TRESHOLD 30
 #define RATIO 3
 
 void detectEdge(const Mat& in, Mat& out);
@@ -68,7 +68,7 @@ bool isPointInArray(const std::vector<std::vector<cv::Point2f>>& pointsArray, co
 
 bool checkDetect(const int d, const cv::Point2f intersection, const int width, const int height, Mat img) {
     int low = 50;
-    int high = 180;
+    int high = 110;
 
     // Define rectangle corners
     Point2f p1 = intersection + Point2f(d, d);
@@ -106,9 +106,16 @@ bool checkDetect(const int d, const cv::Point2f intersection, const int width, c
     return 0;
 }
 
-int main() {
 
-    string filename = "sample1_R_LedsAll_marked.png";
+int main(int argc, char** argv) {
+    // Check for command-line arguments
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <image_file>" << std::endl;
+        return -1;
+    }
+
+    // Get the filename from arguments
+    std::string filename = argv[1];
     int i, j;
     int theta;  // angle of line
     double rho; // distance of point at ortogonal vector
@@ -237,6 +244,8 @@ void detectEdge(const Mat& in, Mat& out) {
     blur(in, out, Size(3, 3));  // per immunità al rumore, sfocatura
     Canny(out, out, TRESHOLD, TRESHOLD * RATIO, KERNEL_SIZE);
 }
+
+
 
 
 int main1() {

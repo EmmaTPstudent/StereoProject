@@ -143,8 +143,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="helper.cpp" />
-    <ClCompile Include="icp_test.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="main1.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="helper.h" />
