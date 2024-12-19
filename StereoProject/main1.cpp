@@ -4,7 +4,6 @@
 using namespace cv;
 using namespace std;
 
-
 #include <iostream>
 #include <cmath>
 #include <math.h>
@@ -14,9 +13,10 @@ using namespace std;
 #include <cstring>
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
+#include <fstream>
 
-using namespace std;
-using namespace cv;
+
+
 
 
 # define pi 3.14159265358979323846  /* pi */
@@ -125,7 +125,55 @@ cv::Mat computeTransformation(const std::vector<cv::Point2f>& source, const std:
 
 
 
+// Function to compute 3D points from disparity map
+std::vector<cv::Point3f> compute3DPointsFromDisparity(const cv::Mat disparityMap, double focalLength, double baseline, double cx, double cy) {
+    std::vector<cv::Point3f> pointCloud;
 
+    for (int y = 0; y < disparityMap.rows; ++y) {
+        for (int x = 0; x < disparityMap.cols; ++x) {
+
+            float disparity = disparityMap.at<uchar>(y, x);
+
+            // Ignore invalid disparity values
+            if (disparity <= 0) continue;
+
+            // Compute depth (Z)
+            double Z = (focalLength * baseline) / disparity;
+
+            // Compute real-world coordinates (X, Y)
+            double X = (x - cx) * Z / focalLength;
+            double Y = (y - cy) * Z / focalLength;
+
+            // Add the 3D point to the point cloud
+            pointCloud.emplace_back(static_cast<float>(X), static_cast<float>(Y), static_cast<float>(Z));
+        }
+    }
+
+    return pointCloud;
+}
+
+
+
+// Function to save 3D points to a CSV file
+void savePointCloudToCSV(const std::vector<cv::Point3f>& pointCloud, const std::string& filename) {
+    std::ofstream file(filename);
+
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file " << filename << " for writing." << std::endl;
+        return;
+    }
+
+    // Write CSV header
+    file << "X,Y,Z\n";
+
+    // Write each point to the file
+    for (const auto& point : pointCloud) {
+        file << point.x << "," << point.y << "," << point.z << "\n";
+    }
+
+    file.close();
+    std::cout << "Point cloud saved to " << filename << std::endl;
+}
 
 
 
@@ -166,12 +214,10 @@ int main() {
     waitKey(1);
 
 
-
-
     // ICP - Iterative Closest Point Algorithm /////////////////////////////////////////////////////////////
     cv::Mat transformation = cv::Mat::eye(3, 3, CV_64F); // Initial transformation
 
-    for (int iter = 0; iter < 10; ++iter) {
+    for (int iter = 0; iter < 10; ++iter) { // Run for multiple iterations
         // Find nearest correspondences
         std::vector<int> correspondences = findCorrespondences(cloud1, cloud2);
 
@@ -181,74 +227,65 @@ int main() {
 
         // Update total transformation
         transformation = deltaTransform * transformation;
+
+        // Apply the transformation to one of the point clouds (cloud2)
+        for (auto& point : cloud1) {
+            double x = point.x;
+            double y = point.y;
+
+            // Apply transformation
+            point.x = deltaTransform.at<double>(0, 0) * x + deltaTransform.at<double>(0, 1) * y + deltaTransform.at<double>(0, 2);
+            point.y = deltaTransform.at<double>(1, 0) * x + deltaTransform.at<double>(1, 1) * y + deltaTransform.at<double>(1, 2);
+        }
+
         std::cout << "Transform:\n" << transformation << std::endl;
-
     }
-
     std::cout << "Final Transformation Matrix:\n" << transformation << std::endl;
 
 
     double theta, tx, ty;
-
-    decomposeTransformation(transformation, theta, tx, ty);
-    
-    Mat rotationMatrix = transformation(cv::Rect(0, 0, 3, 2));
+    decomposeTransformation(transformation, theta, tx, ty); // for display and calculating baseline
+    Mat rotationMatrix = transformation(cv::Rect(0, 0, 3, 2)); // extracting rotation matrix from transformation matrix
     std::cout << "rotationMatrix:\n" << rotationMatrix << std::endl;
 
+    
+    // TRANSFORMING IMAGE 1
     Mat transformedImg1;
     cv::warpAffine(img1, transformedImg1, rotationMatrix, img1.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0));
 
 
 
-    float realDist = 2.752; // measured with calipers
-    float S = realDist / minDist;
-
-    float baseline = S * sqrt(pow(tx, 2) + pow(ty, 2));
-    std::cout << "Physical baseline: " << baseline << std::endl;
-
-
-
-
-
-
-    // Blend the images with 50% transparency
+    // Blend the images with 50% transparency (Just for visualizations!)
     cv::Mat blendedImage;
-    double alpha = 0.5; // Weight for the first image
-    double beta = 1.0 - alpha; // Weight for the second image
-    cv::addWeighted(img2, alpha, transformedImg1, beta, 0.0, blendedImage);
-
-    // Blend the images with 50% transparency
+    cv::addWeighted(img2, 0.5, transformedImg1, 0.5, 0.0, blendedImage);
     cv::Mat blendedImage2;
-    cv::addWeighted(img2, alpha, img1, beta, 0.0, blendedImage2);
+    cv::addWeighted(img2, 0.5, img1, 0.5, 0.0, blendedImage2);
 
-    imdisp("Blended image: img1, img2", blendedImage2, 0, 0, w, h, 1, 0);
-    imdisp("Blended image: transformed img1, img2", blendedImage, 0, 0, w, h, 1, 1);
+    //imdisp("Blended image: img1, img2", blendedImage2, 0, 0, w, h, 0, 2);
+    imdisp("Blended image: transformed img1, img2", blendedImage, 0, 0, w, h, 0, 2);
     waitKey(1);
 
 
     // Setup a rectangle to define your region of interest
     Rect ROI(1600,650,1400,1400); //px, py, w, h
 
-    Mat left = img2.clone();
-    Mat right = transformedImg1.clone();
-    
-    left = left(ROI);
-    right = right(ROI);
-
-    cv::equalizeHist(left, left);
+    Mat right = transformedImg1(ROI);
     cv::equalizeHist(right, right);
-    cv::GaussianBlur(left, left, cv::Size(5, 5), 0);
     cv::GaussianBlur(right, right, cv::Size(5, 5), 0);
 
-    int ch = left.rows / 3;
-    int cw = left.cols / 3;
+    Mat left = img2(ROI);
+    cv::equalizeHist(left, left);
+    cv::GaussianBlur(left, left, cv::Size(5, 5), 0);
 
-    imdisp("Cropped image 1", left, 0, 0, cw, ch, 0, 0);
-    imdisp("Cropped image 2", right, 0, 0, cw, ch, 1, 0);
+    int ch = left.rows / 5;
+    int cw = left.cols / 5;
+
+    imdisp("Cropped image 1", right, 500, 0, cw, ch, 0, 0);
+    imdisp("Cropped image 2", left, 500, 0, cw, ch, 1, 0);
 
     waitKey(1);
-    cout << "Stereo..." << endl;
 
+    cout << "Stereo... This will take approx. 3 minutes..." << endl;
     // Parameters for StereoSGBM
     int numDisparities = 16 * 10;// Must be divisible by 16
     int blockSize = 11;      // Block size to match
@@ -278,7 +315,7 @@ int main() {
     cv::Mat dispVis;
     cv::normalize(disparity, dispVis, 0, 255, cv::NORM_MINMAX, CV_8U);
 
-    imdisp("Disparity map", dispVis, 0, 0, cw, ch, 0, 1);
+    imdisp("Disparity map", dispVis, 500, 0, cw, ch, 0, 1);
     waitKey(1);
 
     Mat fixedDisp = dispVis.clone();
@@ -288,19 +325,35 @@ int main() {
 
     // Replace invalid pixels with the nearest valid neighbor
     replaceInvalidWithNearest(fixedDisp, lowerBound, upperBound);
-
-    imdisp("Disparity map, flooded", fixedDisp, 0, 0, cw, ch, 2, 1);
+    imdisp("Disparity map, flooded", fixedDisp, 500, 0, cw, ch, 1, 1);
     waitKey(1); 
 
-    //Rect ROI2(500, 300, 800, 900);
+    // This is only for visualization! Normalization ruins the data
     Mat fixedDispMinMax = fixedDisp.clone();
-    //fixedDispMinMax = fixedDispMinMax(ROI2);
-
     cv::normalize(fixedDispMinMax, fixedDispMinMax, 0, 255, cv::NORM_MINMAX, CV_8U);
-
-    imdisp("Disparity map, flooded, minMax", fixedDispMinMax, 0, 0, cw, ch, 3, 1);
+    imdisp("Disparity map, flooded, minMax", fixedDispMinMax, 500, 0, cw, ch, 2, 1);
     waitKey(1);
 
+    // Calculating baseline to be used for converting stereo disparity map to spatial image
+    float realDist = 27.52; // [mm] measured with calipers
+    float S = realDist / minDist;
+
+    float baseline = S * sqrt(pow(tx, 2) + pow(ty, 2)); // This scaling factor only works because we're assuming all movement occurs in the focal plane!
+    std::cout << "Physical baseline: " << baseline << std::endl;
+
+
+    Mat heightMap;
+    std::vector<cv::Point3f> sampleCloud = compute3DPointsFromDisparity(fixedDisp, f, baseline, left.cols/2, left.rows/2);
+    std::cout << "Generated sample cloud" << sampleCloud << std::endl;
+
+    // Normalize height map for visualization
+    cv::Mat heightMapVis;
+    cv::normalize(heightMap, heightMapVis, 0, 255, cv::NORM_MINMAX, CV_8U);
+    imdisp("Height map", heightMapVis, 500, 0, cw, ch, 0, 2);
+    waitKey(1);
+
+    string filename = "sampleCloud.csv";
+    savePointCloudToCSV(sampleCloud, filename);
 
 
     waitKey(0);
@@ -312,10 +365,9 @@ int main() {
 
 
 
+
+
 // FUNCTIONS ////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
 bool getMarkers(cv::Mat input, cv::Mat cameraMatrix, cv::Mat distCoeffs, cv::Mat& output, std::vector<cv::Point2f>& cloud, float& minDistance) {
     Mat inputGray, edgesImg, checksImg;
     cvtColor(input, inputGray, COLOR_BGR2GRAY);
